@@ -1,6 +1,7 @@
 pipeline {
     agent any
     environment {
+        CANARY_REPLICAS = 0
         //be sure to replace "willbla" with your own Docker Hub username
         DOCKER_IMAGE_NAME = "matkeb/train-schedule"
     }
@@ -38,9 +39,27 @@ pipeline {
                 }
             }
         }
+        stage('DeployCanary') {
+            when {
+                branch 'master'
+            }
+            environment {
+                CANARY_REPLICAS = 1
+            }
+            steps {
+                kubernetesDeploy(
+                    kubeconfigId: 'kubeconfig',
+                    configs: 'train-schedule-kube-canary.yml',
+                    enableConfigSubstitution: true
+                )
+            }
+        }
         stage('DeployToProduction') {
             when {
                 branch 'master'
+            }
+            environment { 
+                CANARY_REPLICAS = 0
             }
             steps {
                 input 'Deploy to Production?'
@@ -52,5 +71,12 @@ pipeline {
                 )
             }
         }
+    }
+    post {
+        kubernetesDeploy(
+            kubeconfigId: 'kubeconfig',
+            configs: 'train-schedule-kube-canary.yml',
+            enableConfigSubstitution: true
+        )
     }
 }
